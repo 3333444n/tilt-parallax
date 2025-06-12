@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Spaceship Cockpit Parallax</title>
+  <style>
+    /* --- layout resets --- */
+    html, body {
+      height: 100%;
+      width: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: #000; /* fallback while images load */
+    }
+
+    /* --- parallax scene container --- */
+    #scene {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      perspective: 1000px; /* enables 3‑D tilt on the foreground */
+      overflow: hidden;
+      cursor: grab; /* just for fun */
+    }
+
+    /* --- shared layer styles --- */
+    .layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-size: cover;
+      background-position: center;
+      will-change: transform;
+      transform-style: preserve-3d;
+    }
+
+    /* individual layers */
+    #background {
+      background-image: url("background.png");
+      /* subtle scale up so edges don't show when panned */
+      transform: scale(1);
+    }
+
+    #foreground {
+      background-image: url("foreground.png");
+      pointer-events: none; /* allows drag-select across whole viewport */
+    }
+  </style>
+</head>
+<body>
+  <div id="scene">
+    <div id="background" class="layer"></div>
+    <div id="foreground" class="layer"></div>
+  </div>
+
+  <script>
+    (function () {
+      const bg = document.getElementById("background");
+      const fg = document.getElementById("foreground");
+
+      let targetX = 0,
+        targetY = 0,
+        currentX = 0,
+        currentY = 0;
+
+      const lerp = (start, end, factor) => start + (end - start) * factor;
+
+      function onMove(event) {
+        // normalise mouse / touch position to range [-0.5, 0.5]
+        const x = (event.clientX / window.innerWidth) - 0.5;
+        const y = (event.clientY / window.innerHeight) - 0.5;
+        targetX = x;
+        targetY = y;
+      }
+
+      // Device orientation handler for mobile
+      function onDeviceOrientation(event) {
+        // gamma: left/right [-90,90], beta: front/back [-180,180]
+        // We'll normalize gamma to [-0.5, 0.5] (left/right)
+        // and beta to [-0.5, 0.5] (front/back), with some clamping
+        let gamma = event.gamma; // left/right
+        let beta = event.beta;   // front/back
+        // Clamp values for safety
+        gamma = Math.max(-90, Math.min(90, gamma));
+        beta = Math.max(-45, Math.min(45, beta));
+        // Normalize
+        targetX = gamma / 90 * 0.5; // [-0.5, 0.5]
+        targetY = beta / 45 * 0.5;  // [-0.5, 0.5]
+      }
+
+      // Update animation frame
+      function animate() {
+        // Smooth toward the target (ease = 0.08 gives ~12fps feel on fast move)
+        currentX = lerp(currentX, targetX, 0.08);
+        currentY = lerp(currentY, targetY, 0.08);
+
+        // Background pans more dramatically → deep space feels distant
+        const bgTranslateX = currentX * 80; // px
+        const bgTranslateY = currentY * 80; // px
+        bg.style.transform = `translate3d(${bgTranslateX}px, ${bgTranslateY}px, 0) scale(1.1)`;
+
+        // Foreground tilts and nudges a bit for cockpit feeling
+        const fgTiltX = currentY * 10; // deg (rotateX)
+        const fgTiltY = -currentX * 10; // deg (rotateY)
+        const fgTranslateX = currentX * 25; // px
+        const fgTranslateY = currentY * 25; // px
+        fg.style.transform = `translate3d(${fgTranslateX}px, ${fgTranslateY}px, 50px) rotateX(${fgTiltX}deg) rotateY(${fgTiltY}deg) scale(1.1)`;
+
+        requestAnimationFrame(animate);
+      }
+
+      // mouse + (fallback) touch support
+      window.addEventListener("mousemove", onMove);
+      window.addEventListener("touchmove", (e) => onMove(e.touches[0]));
+
+      // Device orientation support for mobile
+      if (window.DeviceOrientationEvent) {
+        // iOS 13+ requires permission
+        function enableDeviceOrientation() {
+          window.addEventListener("deviceorientation", onDeviceOrientation);
+        }
+        if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+          // iOS
+          DeviceOrientationEvent.requestPermission()
+            .then(permissionState => {
+              if (permissionState === 'granted') {
+                enableDeviceOrientation();
+              }
+            })
+            .catch(console.error);
+        } else {
+          // Android/other
+          enableDeviceOrientation();
+        }
+      }
+
+      // kick‑off the render loop
+      requestAnimationFrame(animate);
+    })();
+  </script>
+</body>
+</html>
